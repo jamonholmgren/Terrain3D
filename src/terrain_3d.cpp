@@ -112,6 +112,7 @@ void Terrain3D::__physics_process(const double p_delta) {
 			if (!(MAX(std::abs(_last_buffer_position.x - target_pos_2d.x), std::abs(_last_buffer_position.y - target_pos_2d.y)) < vertex_spacing)) {
 				_last_buffer_position = target_pos_2d;
 				RS->material_set_param(_material->get_buffer_material_rid(), "_target_pos", get_clipmap_target_position());
+				RS->material_set_param(_material->get_buffer_material_rid(), "_world_origin_shift", _world_origin_shift);
 				_d_buffer_vp->set_update_mode(SubViewport::UPDATE_ONCE);
 				// Only call snap on _mesher if the buffer has snapped, prevents stuttering.
 				_terrain_mesher->snap();
@@ -712,6 +713,24 @@ void Terrain3D::snap() {
 	if (_tessellation_level > 0) {
 		_last_buffer_position = V2_MAX;
 	}
+}
+
+void Terrain3D::set_world_origin_shift(const Vector3 &p_shift) {
+	_world_origin_shift = p_shift;
+	snap(); // resets mesher + collision target positions, forces re-snap
+	// Full collision mode isn't updated from __physics_process; trigger update directly.
+	// update() internally checks _initialized and returns early if not ready.
+	if (_collision && !_collision->is_dynamic_mode()) {
+		_collision->update();
+	}
+}
+
+Vector3 Terrain3D::to_true_world_position(const Vector3 &p_shifted_pos) const {
+	return p_shifted_pos + _world_origin_shift;
+}
+
+Vector3 Terrain3D::to_shifted_position(const Vector3 &p_true_world_pos) const {
+	return p_true_world_pos - _world_origin_shift;
 }
 
 void Terrain3D::set_material(const Ref<Terrain3DMaterial> &p_material) {
@@ -1363,6 +1382,12 @@ void Terrain3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_ocean_light_target", "node"), &Terrain3D::set_ocean_light_target);
 	ClassDB::bind_method(D_METHOD("get_ocean_light_target"), &Terrain3D::get_ocean_light_target);
 	ClassDB::bind_method(D_METHOD("snap"), &Terrain3D::snap);
+
+	// Origin Shift
+	ClassDB::bind_method(D_METHOD("set_world_origin_shift", "shift"), &Terrain3D::set_world_origin_shift);
+	ClassDB::bind_method(D_METHOD("get_world_origin_shift"), &Terrain3D::get_world_origin_shift);
+	ClassDB::bind_method(D_METHOD("to_true_world_position", "shifted_pos"), &Terrain3D::to_true_world_position);
+	ClassDB::bind_method(D_METHOD("to_shifted_position", "true_world_pos"), &Terrain3D::to_shifted_position);
 
 	// Collision
 	ClassDB::bind_method(D_METHOD("set_collision_mode", "mode"), &Terrain3D::set_collision_mode);

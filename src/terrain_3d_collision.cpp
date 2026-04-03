@@ -329,6 +329,13 @@ void Terrain3DCollision::update(const Vector2i &p_region_loc, const bool p_rebui
 	}
 	int time = Time::get_singleton()->get_ticks_usec();
 	real_t spacing = _terrain->get_vertex_spacing();
+	Vector3 shift = _terrain->get_world_origin_shift();
+	// Integer descaled shift for grid-aligned data lookup
+	Vector2i descaled_shift = Vector2i(
+			Math::round(shift.x / spacing),
+			Math::round(shift.z / spacing));
+	// Exact float descaled shift for transform adjustment (preserves fractional offsets)
+	Vector3 descaled_shift_exact = Vector3(shift.x / spacing, 0.f, shift.z / spacing);
 
 	if (is_dynamic_mode()) {
 		// Snap descaled position to a _shape_size grid (eg. multiples of 16)
@@ -408,13 +415,17 @@ void Terrain3DCollision::update(const Vector2i &p_region_loc, const bool p_rebui
 					LOG(ERROR, "No more unused shapes! Aborting!");
 					break;
 				}
-				Dictionary shape_data = _get_shape_data(shape_pos, _shape_size);
+				Vector2i data_pos = shape_pos + descaled_shift; // shifted -> true-world (descaled)
+				Dictionary shape_data = _get_shape_data(data_pos, _shape_size);
 				if (shape_data.is_empty()) {
 					LOG(EXTREME, "grid[", i, ":", grid_loc, "] shape_pos : ", shape_pos, " No region found");
 					continue;
 				}
 				int shape_id = inactive_shape_ids.pop_back();
 				Transform3D xform = shape_data["xform"];
+				// xform.origin is in true-world descaled space; shift back to shifted descaled space
+				// Use exact float shift to preserve fractional offsets
+				xform.origin -= descaled_shift_exact;
 				LOG(EXTREME, "grid[", i, ":", grid_loc, "] shape_pos : ", shape_pos, " act ", v3v2i(xform.origin) - shape_offset, " placing shape id ", shape_id);
 				xform.scale(Vector3(spacing, 1.f, spacing));
 				_shape_set_transform(shape_id, xform);
@@ -436,13 +447,14 @@ void Terrain3DCollision::update(const Vector2i &p_region_loc, const bool p_rebui
 			if (p_region_loc != V2I_MAX && region_loc != p_region_loc) {
 				continue;
 			}
-			Vector2i shape_pos = region_loc * region_size;
+			Vector2i shape_pos = region_loc * region_size; // true-world (correct for data)
 			Dictionary shape_data = _get_shape_data(shape_pos, region_size);
 			if (shape_data.is_empty()) {
 				LOG(ERROR, "Can't get shape data for ", region_loc);
 				continue;
 			}
 			Transform3D xform = shape_data["xform"];
+			xform.origin -= descaled_shift_exact; // true-world -> shifted (exact float)
 			xform.scale(Vector3(spacing, 1.f, spacing));
 			_shape_set_transform(i, xform);
 			_shape_set_disabled(i, false);

@@ -44,6 +44,7 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_sc
 // Private uniforms
 group_uniforms shader_uniforms;
 uniform vec3 _target_pos = vec3(0.f);
+uniform vec3 _world_origin_shift = vec3(0.f);
 uniform float _mesh_size = 48.f;
 uniform float _subdiv = 1.f;
 uniform float _tessellation_level = 0.f;
@@ -107,6 +108,7 @@ struct material {
 };
 
 varying vec3 v_vertex;
+varying vec3 v_sample_vertex;  // true-world position for data lookup
 varying float v_vertex_xz_dist;
 varying vec3 v_camera_pos;
 )"
@@ -166,10 +168,13 @@ void vertex() {
 	// Save Camera Position to varying for access in later functions
 	v_camera_pos = MAIN_CAM_INV_VIEW_MATRIX[3].xyz;
 
-	// Get vertex of flat plane in world coordinates and set world UV
+	// Get vertex of flat plane in world coordinates (shifted space for rendering)
 	v_vertex = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 
-	// Distance from target node to vertex on a flat plane
+	// True-world vertex position (for terrain data sampling)
+	v_sample_vertex = v_vertex + _world_origin_shift;
+
+	// Distance from target node to vertex on a flat plane (both shifted space)
 	v_vertex_xz_dist = length(v_vertex.xz - _target_pos.xz);
 
 	// Geomorph vertex across clipmap LODs, set end and start for linear height interpolate
@@ -186,12 +191,17 @@ void vertex() {
 			round(mod(v_vertex.x * inv_scale, 4.0)) * 0.25))) :
 		// Symmetric shift
 		vertex_fract * round((fract(v_vertex.xz * 0.25 * inv_scale) - 0.5) * 4.0);
-	vec2 start_pos = v_vertex.xz * _vertex_density;
-	vec2 end_pos = (v_vertex.xz - shift * scale) * _vertex_density;
-	v_vertex.xz -= shift * scale * vertex_lerp;
+	// Data-lookup positions — use true-world for UV derivation
+	vec2 sample_xz = v_sample_vertex.xz;
+	vec2 start_pos = sample_xz * _vertex_density;
+	vec2 end_pos = (sample_xz - shift * scale) * _vertex_density;
 
-	// UV coordinates in region space. 0-1 covers 1 region, 1-2 is the next region, etc.
-	UV = v_vertex.xz * _vertex_density;
+	// Apply geomorph shift to BOTH render and sample vertices
+	v_vertex.xz -= shift * scale * vertex_lerp;
+	v_sample_vertex.xz -= shift * scale * vertex_lerp;
+
+	// UV coordinates in region space — true-world for region/data lookup
+	UV = v_sample_vertex.xz * _vertex_density;
 
 	// UV coordinates in region space + texel offset. Values are 0 to 1 within regions
 	UV2 = fma(UV, vec2(_region_texel_size), vec2(0.5 * _region_texel_size));
@@ -254,7 +264,7 @@ void accumulate_material(vec3 base_ddx, vec3 base_ddy, const mat3 TNB, const flo
 			float h, inout material mat) {
 
 	// Applying scaling before projection reduces the number of multiplys ops required.
-	vec3 i_vertex = v_vertex;
+	vec3 i_vertex = v_sample_vertex;
 
 	// Control map scale
 	float control_scale = DECODE_SCALE(control);

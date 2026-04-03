@@ -23,9 +23,13 @@ window/vsync/vsync_mode=0
 
 project/assembly_name="Terrain3D"
 
+[autoload]
+
+JamminTestNode="*res://addons/jammin_test/JamminTestAutoload.gd"
+
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/terrain_3d/plugin.cfg")
+enabled=PackedStringArray("res://addons/terrain_3d/plugin.cfg", "res://addons/jammin_test/plugin.cfg")
 
 [filesystem]
 

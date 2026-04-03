@@ -39,6 +39,7 @@ R"(shader_type canvas_item;
 // Private uniforms
 uniform float _tessellation_level = 0.;
 uniform vec3 _target_pos = vec3(0.f);
+uniform vec3 _world_origin_shift = vec3(0.f);
 uniform float _mesh_size = 48.f;
 uniform uint _background_mode = 1u; // NONE = 0, FLAT = 1, NOISE = 2
 uniform float _vertex_spacing = 1.0;
@@ -128,7 +129,7 @@ void accumulate_material(const mat3 TNB, const float weight, const ivec3 index,
 			float h, inout material mat, const vec3 v_vertex) {
 
 	// Applying scaling before projection reduces the number of multiplys ops required.
-	vec3 i_vertex = v_vertex;
+	vec3 i_vertex = v_vertex + _world_origin_shift;
 
 	// Control map scale
 	float control_scale = DECODE_SCALE(control);
@@ -242,7 +243,7 @@ void fragment() {
 	float scale = floor(UV.x * (_tessellation_level));
 	float p_scale = pow(2.0, scale);
 	vec2 uv = (vec2(fract(UV.x * _tessellation_level), UV.y) - 0.5) * (_mesh_size * 2.0) / p_scale;
-	uv += round(_target_pos.xz * _vertex_density * p_scale) / p_scale;
+	uv += round((_target_pos.xz + _world_origin_shift.xz) * _vertex_density * p_scale) / p_scale;
 	vec2 uv2 = uv * _region_texel_size;
 
 	// Lookup offsets, ID and blend weight
