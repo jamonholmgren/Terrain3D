@@ -33,7 +33,7 @@ true_world = shifted + world_origin_shift
 shifted    = true_world - world_origin_shift
 ```
 
-For example: a player is truly at `(50000, 0, 50000)`. The world in Godot's 3D space has been shifted so the player renders at `(0, 0, 0)` in Godot (perhaps with a parent Node3D that has been moved to `(-50000, 0, -50000)`). So, `world_origin_shift` should be at `Vector3(-50000, 0, -50000)`.
+For example: a player is truly at `(50000, 0, 50000)`. The world in Godot's 3D space has been shifted so the player renders at `(0, 0, 0)` in Godot (the `WorldRoot` node has been moved to `(-50000, 0, -50000)`). The `world_origin_shift` is `Vector3(50000, 0, 50000)` — the positive true-world offset.
 
 When you call `set_world_origin_shift(Vector3(50000, 0, 50000))`, Terrain3D:
 
