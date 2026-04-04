@@ -718,10 +718,10 @@ void Terrain3D::snap() {
 void Terrain3D::set_world_origin_shift(const Vector3 &p_shift) {
 	_world_origin_shift = p_shift;
 	snap(); // resets mesher + collision target positions, forces re-snap
-	// Full collision mode isn't updated from __physics_process; trigger update directly.
-	// update() internally checks _initialized and returns early if not ready.
+	// Full collision mode isn't updated from __physics_process; use lightweight
+	// transform-only update (skips expensive heightmap re-reads).
 	if (_collision && !_collision->is_dynamic_mode()) {
-		_collision->update();
+		_collision->update_full_transforms();
 	}
 }
 

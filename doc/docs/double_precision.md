@@ -32,4 +32,5 @@ After that, you can run the double version of Godot with the double version of T
 
 ## Further Reading
 
-See [Support Doubles #30](https://github.com/TokisanGames/Terrain3D/issues/30) for our Issue that documents implementing support for doubles in Terrain3D.
+* See [Support Doubles #30](https://github.com/TokisanGames/Terrain3D/issues/30) for our Issue that documents implementing support for doubles in Terrain3D.
+* [Origin Shifting](origin_shifting.md) is an alternative approach that keeps the player near the origin without requiring a double precision build.

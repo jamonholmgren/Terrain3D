@@ -105,6 +105,7 @@ And the contribution team in :doc:`docs/authors` and displayed on `github contri
    docs/collision
    docs/displacement
    docs/double_precision
+   docs/origin_shifting
    docs/navigation
    docs/occlusion_culling
    docs/programming_languages
