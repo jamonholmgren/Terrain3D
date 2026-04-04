@@ -129,8 +129,6 @@ void accumulate_material(const mat3 TNB, const float weight, const ivec3 index,
 			float h, inout material mat, const vec3 v_vertex) {
 
 	// Applying scaling before projection reduces the number of multiplys ops required.
-	// v_vertex is already in true-world space (reconstructed from shifted UVs on line 246),
-	// so do NOT add _world_origin_shift here — that would double-shift.
 	vec3 i_vertex = v_vertex;
 
 	// Control map scale
