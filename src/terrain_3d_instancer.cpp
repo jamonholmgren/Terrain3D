@@ -209,12 +209,13 @@ void Terrain3DInstancer::_update_mmi_by_region(const Terrain3DRegion *p_region, 
 			RS->instance_set_layer_mask(mmi, ma->get_visibility_layers());
 			_set_mmi_lod_ranges(mmi, ma, lod);
 
-			// Reposition MMI to region location
+			// Reposition MMI to region location (shifted space for rendering)
 			Transform3D t = Transform3D();
 			int region_size = p_region->get_region_size();
 			real_t vertex_spacing = _terrain->get_vertex_spacing();
-			t.origin.x += region_loc.x * region_size * vertex_spacing;
-			t.origin.z += region_loc.y * region_size * vertex_spacing;
+			Vector3 shift = _terrain->get_world_origin_shift();
+			t.origin.x += region_loc.x * region_size * vertex_spacing - shift.x;
+			t.origin.z += region_loc.y * region_size * vertex_spacing - shift.z;
 			RS->instance_set_transform(mmi, t);
 
 			RID &mm = cell_mmi_dict[cell].second;
@@ -565,6 +566,33 @@ void Terrain3DInstancer::initialize(Terrain3D *p_terrain) {
 	IS_DATA_INIT_MESG("Terrain3D not initialized yet", VOID);
 	LOG(INFO, "Initializing Instancer");
 	update_mmis();
+}
+
+// Lightweight transform-only update for origin shift.
+// Repositions all MMIs without regenerating multimesh data.
+void Terrain3DInstancer::update_mmi_transforms() {
+	IS_DATA_INIT(VOID);
+	real_t vertex_spacing = _terrain->get_vertex_spacing();
+	Vector3 shift = _terrain->get_world_origin_shift();
+	for (auto &[region_loc, mesh_dict] : _mmi_rids) {
+		Terrain3DRegion *region = _terrain->get_data()->get_region_ptr(region_loc);
+		if (!region) {
+			continue;
+		}
+		int region_size = region->get_region_size();
+		for (auto &[mesh_key, cell_dict] : mesh_dict) {
+			for (auto &[cell, mmi_pair] : cell_dict) {
+				RID mmi = mmi_pair.first;
+				if (!mmi.is_valid()) {
+					continue;
+				}
+				Transform3D t = Transform3D();
+				t.origin.x = region_loc.x * region_size * vertex_spacing - shift.x;
+				t.origin.z = region_loc.y * region_size * vertex_spacing - shift.z;
+				RS->instance_set_transform(mmi, t);
+			}
+		}
+	}
 }
 
 void Terrain3DInstancer::destroy() {

@@ -78,6 +78,21 @@ private:
 	void _clear();
 	void _copy_paste_dfr(const Terrain3DRegion *p_src_region, const Rect2i &p_src_rect, const Rect2i &p_dst_rect, const Terrain3DRegion *p_dst_region);
 
+	// Origin shift: returns the current shift vector, or zero if no terrain.
+	Vector3 _get_world_origin_shift() const;
+
+	// Internal true-world data accessors (no shift conversion).
+	// Used by internal code that already has true-world positions.
+	Vector2i _get_region_location(const Vector3 &p_true_world_position) const;
+	void _set_pixel(const MapType p_map_type, const Vector3 &p_true_world_position, const Color &p_pixel);
+	Color _get_pixel(const MapType p_map_type, const Vector3 &p_true_world_position) const;
+	real_t _get_height(const Vector3 &p_true_world_position) const;
+	uint32_t _get_control(const Vector3 &p_true_world_position) const;
+	Vector3 _get_normal(const Vector3 &p_true_world_position) const;
+	Vector3 _get_mesh_vertex(const int32_t p_lod, const HeightFilter p_filter, const Vector3 &p_true_world_position) const;
+	bool _is_in_slope(const Vector3 &p_true_world_position, const Vector2 &p_slope_range, const Vector3 &p_normal = V3_ZERO) const;
+	Vector3 _get_texture_id(const Vector3 &p_true_world_position) const;
+
 public:
 	Terrain3DData() {}
 	void initialize(Terrain3D *p_terrain);
@@ -136,6 +151,9 @@ public:
 	RID get_control_maps_rid() const { return _generated_control_maps.get_rid(); }
 	RID get_color_maps_rid() const { return _generated_color_maps.get_rid(); }
 
+	// Public API: accepts positions in shifted space (the live scene near origin).
+	// Internally converts to true-world via _world_origin_shift before data lookup.
+	// Internal code should use the _get_*/_set_* helpers which expect true-world directly.
 	void set_pixel(const MapType p_map_type, const Vector3 &p_global_position, const Color &p_pixel);
 	Color get_pixel(const MapType p_map_type, const Vector3 &p_global_position) const;
 	void set_height(const Vector3 &p_global_position, const real_t p_height);
@@ -209,10 +227,15 @@ inline int Terrain3DData::get_region_map_index(const Vector2i &p_region_loc) {
 	return loc.y * REGION_MAP_SIZE + loc.x;
 }
 
-// Returns a region location given a global position. No bounds checking nor data access.
-inline Vector2i Terrain3DData::get_region_location(const Vector3 &p_global_position) const {
-	Vector2 descaled_position = v3v2(p_global_position) / _vertex_spacing;
+// Internal: returns a region location given a true-world position. No bounds checking nor data access.
+inline Vector2i Terrain3DData::_get_region_location(const Vector3 &p_true_world_position) const {
+	Vector2 descaled_position = v3v2(p_true_world_position) / _vertex_spacing;
 	return Vector2i((descaled_position / real_t(_region_size)).floor());
+}
+
+// Public: accepts shifted-space position, converts to true-world before lookup.
+inline Vector2i Terrain3DData::get_region_location(const Vector3 &p_global_position) const {
+	return _get_region_location(p_global_position + _get_world_origin_shift());
 }
 
 // Returns id of any active region. -1 if out of bounds or no region, or region id
@@ -228,7 +251,7 @@ inline int Terrain3DData::get_region_id(const Vector2i &p_region_loc) const {
 }
 
 inline int Terrain3DData::get_region_idp(const Vector3 &p_global_position) const {
-	return get_region_id(get_region_location(p_global_position));
+	return get_region_id(_get_region_location(p_global_position + _get_world_origin_shift()));
 }
 
 // This function is slower than the version below, but safer when interacting with Godot, which requires
@@ -259,7 +282,7 @@ inline Terrain3DRegion *Terrain3DData::get_region_ptr(const Vector2i &p_region_l
 }
 
 inline Ref<Terrain3DRegion> Terrain3DData::get_regionp(const Vector3 &p_global_position) const {
-	return _regions.get(get_region_location(p_global_position), Ref<Terrain3DRegion>());
+	return _regions.get(_get_region_location(p_global_position + _get_world_origin_shift()), Ref<Terrain3DRegion>());
 }
 
 // Inline Map Functions
