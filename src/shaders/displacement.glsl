@@ -11,7 +11,7 @@ uniform highp sampler2D _displacement_buffer : repeat_disable, filter_linear;
 vec3 get_displacement(vec2 pos, float scale) {
 	float s = floor(log2(1.0 / (scale * _vertex_density)));
 	scale = pow(2.0, s) * 0.5;
-	vec2 d_uv = (scale * pos - round(_target_pos.xz * _vertex_density * scale)) / (_mesh_size * 2.0) + 0.5;
+	vec2 d_uv = (scale * pos - round((_target_pos.xz + _world_origin_shift.xz) * _vertex_density * scale)) / (_mesh_size * 2.0) + 0.5;
 	d_uv.x += s - 1.;
 	d_uv.x /= log2(_subdiv);
 	highp vec3 disp = vec3(0.);

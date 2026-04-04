@@ -322,6 +322,7 @@ void Terrain3DMesher::snap() {
 	Vector3 target_pos = _terrain->get_clipmap_target_position();
 	if (_material.is_valid()) {
 		RS->material_set_param(_material, "_target_pos", target_pos);
+		RS->material_set_param(_material, "_world_origin_shift", _terrain->get_world_origin_shift());
 	}
 	// If clipmap target hasn't moved enough, skip
 	Vector2 target_pos_2d = v3v2(target_pos);

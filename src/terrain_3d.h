@@ -72,6 +72,9 @@ private:
 	TargetNode3D _ocean_light_target;
 	TargetNode3D _camera; // Fallback target for clipmap and collision
 
+	// Origin Shift
+	Vector3 _world_origin_shift = V3_ZERO;
+
 	// Terrain Mesh
 	Terrain3DMesher *_terrain_mesher = nullptr;
 	Ref<Terrain3DMaterial> _material;
@@ -191,6 +194,12 @@ public:
 	void set_ocean_light_target(Node3D *p_node);
 	Node3D *get_ocean_light_target() const { return _ocean_light_target.ptr(); }
 	void snap();
+
+	// Origin Shift
+	void set_world_origin_shift(const Vector3 &p_shift);
+	Vector3 get_world_origin_shift() const { return _world_origin_shift; }
+	Vector3 to_true_world_position(const Vector3 &p_shifted_pos) const;
+	Vector3 to_shifted_position(const Vector3 &p_true_world_pos) const;
 
 	// Collision Aliases
 	void set_collision_mode(const CollisionMode p_mode) { _collision ? _collision->set_mode(p_mode) : void(); }
