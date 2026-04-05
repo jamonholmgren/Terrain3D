@@ -78,7 +78,11 @@ private:
 	void _clear();
 	void _copy_paste_dfr(const Terrain3DRegion *p_src_region, const Rect2i &p_src_rect, const Rect2i &p_dst_rect, const Terrain3DRegion *p_dst_region);
 
-	Vector3 _get_world_origin_shift() const;
+	// Coordinate space conversion helpers.
+	// _to_true_world: shifted scene position → absolute map position (for data lookup).
+	// _to_shifted: absolute map position → shifted scene position (for returning to callers).
+	Vector3 _to_true_world(const Vector3 &p_shifted_pos) const;
+	Vector3 _to_shifted(const Vector3 &p_true_world_pos) const;
 	Vector2i _get_region_location(const Vector3 &p_true_world_position) const;
 	void _set_pixel(const MapType p_map_type, const Vector3 &p_true_world_position, const Color &p_pixel);
 	Color _get_pixel(const MapType p_map_type, const Vector3 &p_true_world_position) const;
@@ -231,7 +235,7 @@ inline Vector2i Terrain3DData::_get_region_location(const Vector3 &p_true_world_
 
 // Public: accepts shifted-space position, converts to true-world before lookup.
 inline Vector2i Terrain3DData::get_region_location(const Vector3 &p_global_position) const {
-	return _get_region_location(p_global_position + _get_world_origin_shift());
+	return _get_region_location(_to_true_world(p_global_position));
 }
 
 // Returns id of any active region. -1 if out of bounds or no region, or region id
@@ -247,7 +251,7 @@ inline int Terrain3DData::get_region_id(const Vector2i &p_region_loc) const {
 }
 
 inline int Terrain3DData::get_region_idp(const Vector3 &p_global_position) const {
-	return get_region_id(_get_region_location(p_global_position + _get_world_origin_shift()));
+	return get_region_id(_get_region_location(_to_true_world(p_global_position)));
 }
 
 // This function is slower than the version below, but safer when interacting with Godot, which requires
@@ -278,7 +282,7 @@ inline Terrain3DRegion *Terrain3DData::get_region_ptr(const Vector2i &p_region_l
 }
 
 inline Ref<Terrain3DRegion> Terrain3DData::get_regionp(const Vector3 &p_global_position) const {
-	return _regions.get(_get_region_location(p_global_position + _get_world_origin_shift()), Ref<Terrain3DRegion>());
+	return _regions.get(_get_region_location(_to_true_world(p_global_position)), Ref<Terrain3DRegion>());
 }
 
 // Inline Map Functions

@@ -43,9 +43,14 @@ void Terrain3DData::_copy_paste_dfr(const Terrain3DRegion *p_src_region, const R
 	_terrain->get_instancer()->copy_paste_dfr(p_src_region, p_src_rect, p_dst_region);
 }
 
-// Origin shift helpers
-Vector3 Terrain3DData::_get_world_origin_shift() const {
-	return _terrain ? _terrain->get_true_world_offset() : V3_ZERO;
+// Coordinate space conversion: shifted scene position → true-world for data lookup
+Vector3 Terrain3DData::_to_true_world(const Vector3 &p_shifted_pos) const {
+	return _terrain ? p_shifted_pos + _terrain->get_true_world_offset() : p_shifted_pos;
+}
+
+// Coordinate space conversion: true-world → shifted scene position
+Vector3 Terrain3DData::_to_shifted(const Vector3 &p_true_world_pos) const {
+	return _terrain ? p_true_world_pos - _terrain->get_true_world_offset() : p_true_world_pos;
 }
 
 uint32_t Terrain3DData::_get_control(const Vector3 &p_true_world_position) const {
@@ -813,23 +818,23 @@ Vector3 Terrain3DData::_get_mesh_vertex(const int32_t p_lod, const HeightFilter 
 ///////////////////////////
 
 void Terrain3DData::set_pixel(const MapType p_map_type, const Vector3 &p_global_position, const Color &p_pixel) {
-	_set_pixel(p_map_type, p_global_position + _get_world_origin_shift(), p_pixel);
+	_set_pixel(p_map_type, _to_true_world(p_global_position), p_pixel);
 }
 
 Color Terrain3DData::get_pixel(const MapType p_map_type, const Vector3 &p_global_position) const {
-	return _get_pixel(p_map_type, p_global_position + _get_world_origin_shift());
+	return _get_pixel(p_map_type, _to_true_world(p_global_position));
 }
 
 real_t Terrain3DData::get_height(const Vector3 &p_global_position) const {
-	return _get_height(p_global_position + _get_world_origin_shift());
+	return _get_height(_to_true_world(p_global_position));
 }
 
 Vector3 Terrain3DData::get_normal(const Vector3 &p_global_position) const {
-	return _get_normal(p_global_position + _get_world_origin_shift());
+	return _get_normal(_to_true_world(p_global_position));
 }
 
 bool Terrain3DData::is_in_slope(const Vector3 &p_global_position, const Vector2 &p_slope_range, const Vector3 &p_normal) const {
-	return _is_in_slope(p_global_position + _get_world_origin_shift(), p_slope_range, p_normal);
+	return _is_in_slope(_to_true_world(p_global_position), p_slope_range, p_normal);
 }
 
 /**
@@ -843,7 +848,7 @@ bool Terrain3DData::is_in_slope(const Vector3 &p_global_position, const Vector2 
  * value of .3-.5, otherwise it's the base texture.
  **/
 Vector3 Terrain3DData::get_texture_id(const Vector3 &p_global_position) const {
-	return _get_texture_id(p_global_position + _get_world_origin_shift());
+	return _get_texture_id(_to_true_world(p_global_position));
 }
 
 /**
@@ -856,7 +861,7 @@ Vector3 Terrain3DData::get_texture_id(const Vector3 &p_global_position) const {
  * p_global_position: X and Z coordinates of the vertex. Heights will be sampled around these coordinates.
  */
 Vector3 Terrain3DData::get_mesh_vertex(const int32_t p_lod, const HeightFilter p_filter, const Vector3 &p_global_position) const {
-	return _get_mesh_vertex(p_lod, p_filter, p_global_position + _get_world_origin_shift());
+	return _get_mesh_vertex(p_lod, p_filter, _to_true_world(p_global_position));
 }
 
 void Terrain3DData::add_edited_area(const AABB &p_area) {
