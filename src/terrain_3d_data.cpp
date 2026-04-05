@@ -58,6 +58,203 @@ uint32_t Terrain3DData::_get_control(const Vector3 &p_true_world_position) const
 	return (std::isnan(val)) ? UINT32_MAX : as_uint(val);
 }
 
+void Terrain3DData::_set_pixel(const MapType p_map_type, const Vector3 &p_true_world_position, const Color &p_pixel) {
+	if (p_map_type < 0 || p_map_type >= TYPE_MAX) {
+		LOG(ERROR, "Specified map type out of range");
+		return;
+	}
+	Vector2i region_loc = _get_region_location(p_true_world_position);
+	Terrain3DRegion *region = get_region_ptr(region_loc);
+	if (!region) {
+		LOG(ERROR, "No active region found at: ", p_true_world_position);
+		return;
+	}
+	if (region->is_deleted()) {
+		LOG(ERROR, "No active region found at: ", p_true_world_position);
+		return;
+	}
+	Vector2i global_offset = region_loc * _region_size;
+	Vector3 descaled_pos = p_true_world_position / _vertex_spacing;
+	Vector2i img_pos = Vector2i(descaled_pos.x - global_offset.x, descaled_pos.z - global_offset.y);
+	img_pos = img_pos.clamp(V2I_ZERO, V2I(_region_size - 1));
+	Image *map = region->get_map_ptr(p_map_type);
+	if (map) {
+		map->set_pixelv(img_pos, p_pixel);
+		region->set_modified(true);
+	}
+}
+
+Color Terrain3DData::_get_pixel(const MapType p_map_type, const Vector3 &p_true_world_position) const {
+	if (p_map_type < 0 || p_map_type >= TYPE_MAX) {
+		LOG(ERROR, "Specified map type out of range");
+		return COLOR_NAN;
+	}
+	Vector2i region_loc = _get_region_location(p_true_world_position);
+	const Terrain3DRegion *region = get_region_ptr(region_loc);
+	if (!region) {
+		return COLOR_NAN;
+	}
+	if (region->is_deleted()) {
+		return COLOR_NAN;
+	}
+	Vector2i global_offset = region_loc * _region_size;
+	Vector3 descaled_pos = p_true_world_position / _vertex_spacing;
+	Vector2i img_pos = Vector2i(descaled_pos.x - global_offset.x, descaled_pos.z - global_offset.y);
+	img_pos = img_pos.clamp(V2I_ZERO, V2I(_region_size - 1));
+	Image *map = region->get_map_ptr(p_map_type);
+	if (map) {
+		return map->get_pixelv(img_pos);
+	} else {
+		return COLOR_NAN;
+	}
+}
+
+real_t Terrain3DData::_get_height(const Vector3 &p_true_world_position) const {
+	if (is_hole(_get_control(p_true_world_position))) {
+		return NAN;
+	}
+	Vector3 pos = p_true_world_position;
+	const real_t &step = _vertex_spacing;
+	pos.y = 0.f;
+	// Round to nearest vertex
+	Vector3 pos_round = pos.snapped(Vector3(step, 0.f, step));
+	// If requested position is close to a vertex, return its height
+	if ((pos - pos_round).length_squared() < 0.0001f) {
+		return _get_pixel(TYPE_HEIGHT, pos).r;
+	} else {
+		// Otherwise, bilinearly interpolate 4 surrounding vertices
+		Vector3 pos00 = Vector3(floor(pos.x / step) * step, 0.f, floor(pos.z / step) * step);
+		real_t ht00 = _get_pixel(TYPE_HEIGHT, pos00).r;
+		Vector3 pos01 = pos00 + Vector3(0.f, 0.f, step);
+		real_t ht01 = _get_pixel(TYPE_HEIGHT, pos01).r;
+		Vector3 pos10 = pos00 + Vector3(step, 0.f, 0.f);
+		real_t ht10 = _get_pixel(TYPE_HEIGHT, pos10).r;
+		Vector3 pos11 = pos00 + Vector3(step, 0.f, step);
+		real_t ht11 = _get_pixel(TYPE_HEIGHT, pos11).r;
+		return bilerp(ht00, ht01, ht10, ht11, pos00, pos11, pos);
+	}
+}
+
+Vector3 Terrain3DData::_get_normal(const Vector3 &p_true_world_position) const {
+	if (get_region_id(_get_region_location(p_true_world_position)) < 0 || is_hole(_get_control(p_true_world_position))) {
+		return V3_NAN;
+	}
+	real_t height = _get_height(p_true_world_position);
+	real_t u = height - _get_height(p_true_world_position + Vector3(_vertex_spacing, 0.0f, 0.0f));
+	real_t v = height - _get_height(p_true_world_position + Vector3(0.f, 0.f, _vertex_spacing));
+	Vector3 normal = Vector3(u, _vertex_spacing, v);
+	normal.normalize();
+	return normal;
+}
+
+bool Terrain3DData::_is_in_slope(const Vector3 &p_true_world_position, const Vector2 &p_slope_range, const Vector3 &p_normal) const {
+	// If slope is full range, nothing to do here
+	const Vector2 slope_range = CLAMP(p_slope_range, V2_ZERO, V2(90.f));
+	if (slope_range.y - slope_range.x > 89.99f) {
+		return true;
+	}
+
+	// Use custom normal if provided
+	Vector3 slope_normal = p_normal;
+	if (!slope_normal.is_zero_approx()) {
+		slope_normal.normalize();
+	} else {
+		// Else, compute terrain normal
+		if (get_region_id(_get_region_location(p_true_world_position)) < 0) {
+			return false;
+		}
+		// Adapted from _get_height() to work with holes
+		auto get_height_fn = [&](Vector3 pos) -> real_t {
+			real_t step = _terrain->get_vertex_spacing();
+			// Round to nearest vertex
+			Vector3 pos_round = pos.snapped(Vector3(step, 0.f, step));
+			real_t height = _get_pixel(TYPE_HEIGHT, pos_round).r;
+			return std::isnan(height) ? 0.f : height;
+		};
+
+		const real_t vertex_spacing = _terrain->get_vertex_spacing();
+		const real_t height = get_height_fn(p_true_world_position);
+		const real_t u = height - get_height_fn(p_true_world_position + Vector3(vertex_spacing, 0.0f, 0.0f));
+		const real_t v = height - get_height_fn(p_true_world_position + Vector3(0.f, 0.f, vertex_spacing));
+		slope_normal = Vector3(u, vertex_spacing, v);
+		slope_normal.normalize();
+	}
+
+	const real_t slope_angle = Math::acos(slope_normal.dot(V3_UP));
+	const real_t slope_angle_degrees = Math::rad_to_deg(slope_angle);
+	return (slope_range.x <= slope_angle_degrees) && (slope_angle_degrees <= slope_range.y);
+}
+
+Vector3 Terrain3DData::_get_texture_id(const Vector3 &p_true_world_position) const {
+	// Verify in a region
+	int region_id = get_region_id(_get_region_location(p_true_world_position));
+	if (region_id < 0) {
+		return V3_NAN;
+	}
+
+	// Verify not in a hole
+	float src = _get_pixel(TYPE_CONTROL, p_true_world_position).r; // 32-bit float, not double/real
+	if (is_hole(src)) {
+		return V3_NAN;
+	}
+
+	// If material available, autoshader enabled, and pixel set to auto
+	if (_terrain) {
+		Ref<Terrain3DMaterial> t_material = _terrain->get_material();
+		bool auto_enabled = t_material->get_auto_shader_enabled();
+		bool control_auto = is_auto(src);
+		if (auto_enabled && control_auto) {
+			real_t auto_slope = real_t(t_material->get_shader_param("auto_slope"));
+			real_t auto_height_reduction = real_t(t_material->get_shader_param("auto_height_reduction"));
+			real_t height = _get_height(p_true_world_position);
+			Vector3 normal = _get_normal(p_true_world_position);
+			uint32_t base_id = t_material->get_shader_param("auto_base_texture");
+			uint32_t overlay_id = t_material->get_shader_param("auto_overlay_texture");
+			real_t blend = CLAMP((auto_slope * 2.f * (normal.y - 1.f) + 1.f) - auto_height_reduction * .01f * height, 0.f, 1.f);
+			return Vector3(real_t(base_id), real_t(overlay_id), blend);
+		}
+	}
+
+	// Else, just get textures from control map
+	uint32_t base_id = get_base(src);
+	uint32_t overlay_id = get_overlay(src);
+	real_t blend = real_t(get_blend(src)) / 255.0f;
+	return Vector3(real_t(base_id), real_t(overlay_id), blend);
+}
+
+Vector3 Terrain3DData::_get_mesh_vertex(const int32_t p_lod, const HeightFilter p_filter, const Vector3 &p_true_world_position) const {
+	LOG(INFO, "Calculating vertex location");
+	int32_t step = 1 << CLAMP(p_lod, 0, 8);
+	real_t height = 0.0f;
+
+	switch (p_filter) {
+		case HEIGHT_FILTER_NEAREST: {
+			if (is_hole(_get_control(p_true_world_position))) {
+				height = NAN;
+			} else {
+				height = _get_height(p_true_world_position);
+			}
+		} break;
+		case HEIGHT_FILTER_MINIMUM: {
+			height = _get_height(p_true_world_position);
+			for (int32_t dx = -step / 2; dx < step / 2; dx += 1) {
+				for (int32_t dz = -step / 2; dz < step / 2; dz += 1) {
+					Vector3 position = p_true_world_position + Vector3(dx, 0.f, dz) * _vertex_spacing;
+					if (is_hole(_get_control(position))) {
+						height = NAN;
+						break;
+					}
+					real_t h = _get_height(position);
+					if (h < height) {
+						height = h;
+					}
+				}
+			}
+		} break;
+	}
+	return Vector3(p_true_world_position.x, height, p_true_world_position.z);
+}
+
 ///////////////////////////
 // Public Functions
 ///////////////////////////
@@ -614,208 +811,6 @@ void Terrain3DData::update_maps(const MapType p_map_type, const bool p_all_regio
 		_terrain->snap();
 	}
 }
-
-void Terrain3DData::_set_pixel(const MapType p_map_type, const Vector3 &p_true_world_position, const Color &p_pixel) {
-	if (p_map_type < 0 || p_map_type >= TYPE_MAX) {
-		LOG(ERROR, "Specified map type out of range");
-		return;
-	}
-	Vector2i region_loc = _get_region_location(p_true_world_position);
-	Terrain3DRegion *region = get_region_ptr(region_loc);
-	if (!region) {
-		LOG(ERROR, "No active region found at: ", p_true_world_position);
-		return;
-	}
-	if (region->is_deleted()) {
-		LOG(ERROR, "No active region found at: ", p_true_world_position);
-		return;
-	}
-	Vector2i global_offset = region_loc * _region_size;
-	Vector3 descaled_pos = p_true_world_position / _vertex_spacing;
-	Vector2i img_pos = Vector2i(descaled_pos.x - global_offset.x, descaled_pos.z - global_offset.y);
-	img_pos = img_pos.clamp(V2I_ZERO, V2I(_region_size - 1));
-	Image *map = region->get_map_ptr(p_map_type);
-	if (map) {
-		map->set_pixelv(img_pos, p_pixel);
-		region->set_modified(true);
-	}
-}
-
-Color Terrain3DData::_get_pixel(const MapType p_map_type, const Vector3 &p_true_world_position) const {
-	if (p_map_type < 0 || p_map_type >= TYPE_MAX) {
-		LOG(ERROR, "Specified map type out of range");
-		return COLOR_NAN;
-	}
-	Vector2i region_loc = _get_region_location(p_true_world_position);
-	const Terrain3DRegion *region = get_region_ptr(region_loc);
-	if (!region) {
-		return COLOR_NAN;
-	}
-	if (region->is_deleted()) {
-		return COLOR_NAN;
-	}
-	Vector2i global_offset = region_loc * _region_size;
-	Vector3 descaled_pos = p_true_world_position / _vertex_spacing;
-	Vector2i img_pos = Vector2i(descaled_pos.x - global_offset.x, descaled_pos.z - global_offset.y);
-	img_pos = img_pos.clamp(V2I_ZERO, V2I(_region_size - 1));
-	Image *map = region->get_map_ptr(p_map_type);
-	if (map) {
-		return map->get_pixelv(img_pos);
-	} else {
-		return COLOR_NAN;
-	}
-}
-
-real_t Terrain3DData::_get_height(const Vector3 &p_true_world_position) const {
-	if (is_hole(_get_control(p_true_world_position))) {
-		return NAN;
-	}
-	Vector3 pos = p_true_world_position;
-	const real_t &step = _vertex_spacing;
-	pos.y = 0.f;
-	// Round to nearest vertex
-	Vector3 pos_round = pos.snapped(Vector3(step, 0.f, step));
-	// If requested position is close to a vertex, return its height
-	if ((pos - pos_round).length_squared() < 0.0001f) {
-		return _get_pixel(TYPE_HEIGHT, pos).r;
-	} else {
-		// Otherwise, bilinearly interpolate 4 surrounding vertices
-		Vector3 pos00 = Vector3(floor(pos.x / step) * step, 0.f, floor(pos.z / step) * step);
-		real_t ht00 = _get_pixel(TYPE_HEIGHT, pos00).r;
-		Vector3 pos01 = pos00 + Vector3(0.f, 0.f, step);
-		real_t ht01 = _get_pixel(TYPE_HEIGHT, pos01).r;
-		Vector3 pos10 = pos00 + Vector3(step, 0.f, 0.f);
-		real_t ht10 = _get_pixel(TYPE_HEIGHT, pos10).r;
-		Vector3 pos11 = pos00 + Vector3(step, 0.f, step);
-		real_t ht11 = _get_pixel(TYPE_HEIGHT, pos11).r;
-		return bilerp(ht00, ht01, ht10, ht11, pos00, pos11, pos);
-	}
-}
-
-Vector3 Terrain3DData::_get_normal(const Vector3 &p_true_world_position) const {
-	if (get_region_id(_get_region_location(p_true_world_position)) < 0 || is_hole(_get_control(p_true_world_position))) {
-		return V3_NAN;
-	}
-	real_t height = _get_height(p_true_world_position);
-	real_t u = height - _get_height(p_true_world_position + Vector3(_vertex_spacing, 0.0f, 0.0f));
-	real_t v = height - _get_height(p_true_world_position + Vector3(0.f, 0.f, _vertex_spacing));
-	Vector3 normal = Vector3(u, _vertex_spacing, v);
-	normal.normalize();
-	return normal;
-}
-
-bool Terrain3DData::_is_in_slope(const Vector3 &p_true_world_position, const Vector2 &p_slope_range, const Vector3 &p_normal) const {
-	// If slope is full range, nothing to do here
-	const Vector2 slope_range = CLAMP(p_slope_range, V2_ZERO, V2(90.f));
-	if (slope_range.y - slope_range.x > 89.99f) {
-		return true;
-	}
-
-	// Use custom normal if provided
-	Vector3 slope_normal = p_normal;
-	if (!slope_normal.is_zero_approx()) {
-		slope_normal.normalize();
-	} else {
-		// Else, compute terrain normal
-		if (get_region_id(_get_region_location(p_true_world_position)) < 0) {
-			return false;
-		}
-		// Adapted from _get_height() to work with holes
-		auto get_height_fn = [&](Vector3 pos) -> real_t {
-			real_t step = _terrain->get_vertex_spacing();
-			// Round to nearest vertex
-			Vector3 pos_round = pos.snapped(Vector3(step, 0.f, step));
-			real_t height = _get_pixel(TYPE_HEIGHT, pos_round).r;
-			return std::isnan(height) ? 0.f : height;
-		};
-
-		const real_t vertex_spacing = _terrain->get_vertex_spacing();
-		const real_t height = get_height_fn(p_true_world_position);
-		const real_t u = height - get_height_fn(p_true_world_position + Vector3(vertex_spacing, 0.0f, 0.0f));
-		const real_t v = height - get_height_fn(p_true_world_position + Vector3(0.f, 0.f, vertex_spacing));
-		slope_normal = Vector3(u, vertex_spacing, v);
-		slope_normal.normalize();
-	}
-
-	const real_t slope_angle = Math::acos(slope_normal.dot(V3_UP));
-	const real_t slope_angle_degrees = Math::rad_to_deg(slope_angle);
-	return (slope_range.x <= slope_angle_degrees) && (slope_angle_degrees <= slope_range.y);
-}
-
-Vector3 Terrain3DData::_get_texture_id(const Vector3 &p_true_world_position) const {
-	// Verify in a region
-	int region_id = get_region_id(_get_region_location(p_true_world_position));
-	if (region_id < 0) {
-		return V3_NAN;
-	}
-
-	// Verify not in a hole
-	float src = _get_pixel(TYPE_CONTROL, p_true_world_position).r; // 32-bit float, not double/real
-	if (is_hole(src)) {
-		return V3_NAN;
-	}
-
-	// If material available, autoshader enabled, and pixel set to auto
-	if (_terrain) {
-		Ref<Terrain3DMaterial> t_material = _terrain->get_material();
-		bool auto_enabled = t_material->get_auto_shader_enabled();
-		bool control_auto = is_auto(src);
-		if (auto_enabled && control_auto) {
-			real_t auto_slope = real_t(t_material->get_shader_param("auto_slope"));
-			real_t auto_height_reduction = real_t(t_material->get_shader_param("auto_height_reduction"));
-			real_t height = _get_height(p_true_world_position);
-			Vector3 normal = _get_normal(p_true_world_position);
-			uint32_t base_id = t_material->get_shader_param("auto_base_texture");
-			uint32_t overlay_id = t_material->get_shader_param("auto_overlay_texture");
-			real_t blend = CLAMP((auto_slope * 2.f * (normal.y - 1.f) + 1.f) - auto_height_reduction * .01f * height, 0.f, 1.f);
-			return Vector3(real_t(base_id), real_t(overlay_id), blend);
-		}
-	}
-
-	// Else, just get textures from control map
-	uint32_t base_id = get_base(src);
-	uint32_t overlay_id = get_overlay(src);
-	real_t blend = real_t(get_blend(src)) / 255.0f;
-	return Vector3(real_t(base_id), real_t(overlay_id), blend);
-}
-
-Vector3 Terrain3DData::_get_mesh_vertex(const int32_t p_lod, const HeightFilter p_filter, const Vector3 &p_true_world_position) const {
-	LOG(INFO, "Calculating vertex location");
-	int32_t step = 1 << CLAMP(p_lod, 0, 8);
-	real_t height = 0.0f;
-
-	switch (p_filter) {
-		case HEIGHT_FILTER_NEAREST: {
-			if (is_hole(_get_control(p_true_world_position))) {
-				height = NAN;
-			} else {
-				height = _get_height(p_true_world_position);
-			}
-		} break;
-		case HEIGHT_FILTER_MINIMUM: {
-			height = _get_height(p_true_world_position);
-			for (int32_t dx = -step / 2; dx < step / 2; dx += 1) {
-				for (int32_t dz = -step / 2; dz < step / 2; dz += 1) {
-					Vector3 position = p_true_world_position + Vector3(dx, 0.f, dz) * _vertex_spacing;
-					if (is_hole(_get_control(position))) {
-						height = NAN;
-						break;
-					}
-					real_t h = _get_height(position);
-					if (h < height) {
-						height = h;
-					}
-				}
-			}
-		} break;
-	}
-	return Vector3(p_true_world_position.x, height, p_true_world_position.z);
-}
-
-///////////////////////////
-// Public API: auto-converts shifted positions to true-world via _world_origin_shift.
-// GDScript and external callers use these.
-///////////////////////////
 
 void Terrain3DData::set_pixel(const MapType p_map_type, const Vector3 &p_global_position, const Color &p_pixel) {
 	_set_pixel(p_map_type, _to_true_world(p_global_position), p_pixel);
