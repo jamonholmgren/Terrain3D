@@ -72,7 +72,7 @@ public:
 
 	void initialize(Terrain3D *p_terrain);
 	void destroy();
-	void update_mmi_transforms();
+	void apply_mmi_origin_shift_transforms();
 
 	void clear_by_mesh(const int p_mesh_id);
 	void clear_by_location(const Vector2i &p_region_loc, const int p_mesh_id);

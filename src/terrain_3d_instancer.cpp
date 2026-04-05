@@ -209,7 +209,7 @@ void Terrain3DInstancer::_update_mmi_by_region(const Terrain3DRegion *p_region, 
 			RS->instance_set_layer_mask(mmi, ma->get_visibility_layers());
 			_set_mmi_lod_ranges(mmi, ma, lod);
 
-			// Reposition MMI to region location (shifted space for rendering)
+			// Reposition MMI to region location
 			Transform3D t = Transform3D();
 			int region_size = p_region->get_region_size();
 			real_t vertex_spacing = _terrain->get_vertex_spacing();
@@ -570,7 +570,7 @@ void Terrain3DInstancer::initialize(Terrain3D *p_terrain) {
 
 // Lightweight transform-only update for origin shift.
 // Repositions all MMIs without regenerating multimesh data.
-void Terrain3DInstancer::update_mmi_transforms() {
+void Terrain3DInstancer::apply_mmi_origin_shift_transforms() {
 	IS_DATA_INIT(VOID);
 	real_t vertex_spacing = _terrain->get_vertex_spacing();
 	Vector3 shift = _terrain->get_true_world_offset();

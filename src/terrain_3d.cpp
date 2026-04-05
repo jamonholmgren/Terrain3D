@@ -722,7 +722,7 @@ void Terrain3D::set_world_origin_shift(const Vector3 &p_shift) {
 		_collision->apply_origin_shift_transforms();
 	}
 	if (_instancer) {
-		_instancer->update_mmi_transforms();
+		_instancer->apply_mmi_origin_shift_transforms();
 	}
 }
 
