@@ -171,7 +171,7 @@ void vertex() {
 	// Get vertex of flat plane in world coordinates and set world UV
 	v_vertex = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 
-	// True-world vertex position (for terrain data sampling when origin shifting)
+	// Apply origin shift for true-world sampling
 	v_origin_shifted_vertex = v_vertex + _world_origin_shift;
 
 	// Distance from target node to vertex on a flat plane
