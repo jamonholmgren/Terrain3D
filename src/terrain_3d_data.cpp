@@ -43,16 +43,6 @@ void Terrain3DData::_copy_paste_dfr(const Terrain3DRegion *p_src_region, const R
 	_terrain->get_instancer()->copy_paste_dfr(p_src_region, p_src_rect, p_dst_region);
 }
 
-// Coordinate space conversion: shifted scene position → true-world for data lookup
-Vector3 Terrain3DData::_to_true_world(const Vector3 &p_shifted_pos) const {
-	return _terrain ? p_shifted_pos + _terrain->get_true_world_offset() : p_shifted_pos;
-}
-
-// Coordinate space conversion: true-world → shifted scene position
-Vector3 Terrain3DData::_to_shifted(const Vector3 &p_true_world_pos) const {
-	return _terrain ? p_true_world_pos - _terrain->get_true_world_offset() : p_true_world_pos;
-}
-
 uint32_t Terrain3DData::_get_control(const Vector3 &p_true_world_position) const {
 	real_t val = _get_pixel(TYPE_CONTROL, p_true_world_position).r;
 	return (std::isnan(val)) ? UINT32_MAX : as_uint(val);
@@ -225,6 +215,18 @@ bool Terrain3DData::is_region_deleted(const Vector2i &p_region_loc) const {
 		return true;
 	}
 	return region->is_deleted();
+}
+
+Vector2i Terrain3DData::get_region_location(const Vector3 &p_global_position) const {
+	return _get_region_location(_terrain->to_true_world_position(p_global_position));
+}
+
+int Terrain3DData::get_region_idp(const Vector3 &p_global_position) const {
+	return get_region_id(_get_region_location(_terrain->to_true_world_position(p_global_position)));
+}
+
+Ref<Terrain3DRegion> Terrain3DData::get_regionp(const Vector3 &p_global_position) const {
+	return _regions.get(_get_region_location(_terrain->to_true_world_position(p_global_position)), Ref<Terrain3DRegion>());
 }
 
 Ref<Terrain3DRegion> Terrain3DData::add_region_blankp(const Vector3 &p_global_position, const bool p_update) {
@@ -616,7 +618,7 @@ void Terrain3DData::update_maps(const MapType p_map_type, const bool p_all_regio
 }
 
 void Terrain3DData::set_pixel(const MapType p_map_type, const Vector3 &p_global_position, const Color &p_pixel) {
-	_set_pixel(p_map_type, _to_true_world(p_global_position), p_pixel);
+	_set_pixel(p_map_type, _terrain->to_true_world_position(p_global_position), p_pixel);
 }
 
 // TODO: Leaving private method here to make diffing / code review easier; move to private section before merging
@@ -647,7 +649,7 @@ void Terrain3DData::_set_pixel(const MapType p_map_type, const Vector3 &p_true_w
 }
 
 Color Terrain3DData::get_pixel(const MapType p_map_type, const Vector3 &p_global_position) const {
-	return _get_pixel(p_map_type, _to_true_world(p_global_position));
+	return _get_pixel(p_map_type, _terrain->to_true_world_position(p_global_position));
 }
 
 // TODO: Leaving private method here to make diffing / code review easier; move to private section before merging
@@ -677,7 +679,7 @@ Color Terrain3DData::_get_pixel(const MapType p_map_type, const Vector3 &p_true_
 }
 
 real_t Terrain3DData::get_height(const Vector3 &p_global_position) const {
-	return _get_height(_to_true_world(p_global_position));
+	return _get_height(_terrain->to_true_world_position(p_global_position));
 }
 
 // TODO: Leaving private method here to make diffing / code review easier; move to private section before merging
@@ -708,7 +710,7 @@ real_t Terrain3DData::_get_height(const Vector3 &p_true_world_position) const {
 }
 
 Vector3 Terrain3DData::get_normal(const Vector3 &p_global_position) const {
-	return _get_normal(_to_true_world(p_global_position));
+	return _get_normal(_terrain->to_true_world_position(p_global_position));
 }
 
 // TODO: Leaving private method here to make diffing / code review easier; move to private section before merging
@@ -725,7 +727,7 @@ Vector3 Terrain3DData::_get_normal(const Vector3 &p_true_world_position) const {
 }
 
 bool Terrain3DData::is_in_slope(const Vector3 &p_global_position, const Vector2 &p_slope_range, const Vector3 &p_normal) const {
-	return _is_in_slope(_to_true_world(p_global_position), p_slope_range, p_normal);
+	return _is_in_slope(_terrain->to_true_world_position(p_global_position), p_slope_range, p_normal);
 }
 
 // TODO: Leaving private method here to make diffing / code review easier; move to private section before merging
@@ -778,7 +780,7 @@ bool Terrain3DData::_is_in_slope(const Vector3 &p_true_world_position, const Vec
  * value of .3-.5, otherwise it's the base texture.
  **/
 Vector3 Terrain3DData::get_texture_id(const Vector3 &p_global_position) const {
-	return _get_texture_id(_to_true_world(p_global_position));
+	return _get_texture_id(_terrain->to_true_world_position(p_global_position));
 }
 
 // TODO: Leaving private method here to make diffing / code review easier; move to private section before merging
@@ -829,7 +831,7 @@ Vector3 Terrain3DData::_get_texture_id(const Vector3 &p_true_world_position) con
  * p_global_position: X and Z coordinates of the vertex. Heights will be sampled around these coordinates.
  */
 Vector3 Terrain3DData::get_mesh_vertex(const int32_t p_lod, const HeightFilter p_filter, const Vector3 &p_global_position) const {
-	return _get_mesh_vertex(p_lod, p_filter, _to_true_world(p_global_position));
+	return _get_mesh_vertex(p_lod, p_filter, _terrain->to_true_world_position(p_global_position));
 }
 
 // TODO: Leaving private method here to make diffing / code review easier; move to private section before merging
