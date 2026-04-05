@@ -832,10 +832,29 @@ bool Terrain3DData::is_in_slope(const Vector3 &p_global_position, const Vector2 
 	return _is_in_slope(p_global_position + _get_world_origin_shift(), p_slope_range, p_normal);
 }
 
+/**
+ * Returns:
+ * X = base index
+ * Y = overlay index
+ * Z = percentage blend between X and Y. Limited to the fixed values in RANGE.
+ * Interpretation of this data is up to the gamedev. Unfortunately due to blending, this isn't
+ * pixel perfect. I would have your player print this location as you walk around to see how the
+ * blending values look, then consider that the overlay texture is visible starting at a blend
+ * value of .3-.5, otherwise it's the base texture.
+ **/
 Vector3 Terrain3DData::get_texture_id(const Vector3 &p_global_position) const {
 	return _get_texture_id(p_global_position + _get_world_origin_shift());
 }
 
+/**
+ * Returns the location of a terrain vertex at a certain LOD. If there is a hole at the position, it returns
+ * NAN in the vector's Y coordinate.
+ * p_lod (0-8): Determines how many heights around the given global position will be sampled.
+ * p_filter:
+ *  HEIGHT_FILTER_NEAREST: Samples the height map at the exact coordinates given.
+ *  HEIGHT_FILTER_MINIMUM: Samples (1 << p_lod) ** 2 heights around the given coordinates and returns the lowest.
+ * p_global_position: X and Z coordinates of the vertex. Heights will be sampled around these coordinates.
+ */
 Vector3 Terrain3DData::get_mesh_vertex(const int32_t p_lod, const HeightFilter p_filter, const Vector3 &p_global_position) const {
 	return _get_mesh_vertex(p_lod, p_filter, p_global_position + _get_world_origin_shift());
 }
