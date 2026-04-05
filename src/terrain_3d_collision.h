@@ -65,7 +65,7 @@ public:
 	void build();
 	void reset_target_position() { _last_snapped_pos = V2I_MAX; }
 	void update(const Vector2i &p_region_loc = V2I_MAX, const bool p_rebuild = false);
-	void update_full_transforms(); // Lightweight: repositions full-mode shapes without regenerating height data
+	void apply_origin_shift_transforms();
 	void destroy();
 
 	void set_mode(const CollisionMode p_mode);

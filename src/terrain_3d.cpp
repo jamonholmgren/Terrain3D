@@ -387,7 +387,6 @@ void Terrain3D::_generate_triangles(PackedVector3Array &p_vertices, PackedVector
 
 		for (int32_t z = z_start; z < z_end; ++z) {
 			for (int32_t x = x_start; x < x_end; ++x) {
-				// x,z are descaled true-world; use internal accessor
 				real_t height = _data->_get_height(Vector3(x, 0.f, z));
 				if (height >= p_global_aabb.position.y && height <= p_global_aabb.get_end().y) {
 					_generate_triangle_pair(p_vertices, p_uvs, p_lod, p_filter, p_require_nav, x, z);
@@ -413,7 +412,6 @@ void Terrain3D::_generate_triangle_pair(PackedVector3Array &p_vertices, PackedVe
 	Vector3 xsz = Vector3(x + step, 0.0f, z) * _vertex_spacing;
 	Vector3 xzs = Vector3(x, 0.0f, z + step) * _vertex_spacing;
 	Vector3 xszs = Vector3(x + step, 0.0f, z + step) * _vertex_spacing;
-	// Use internal true-world accessors; x,z are already in true-world descaled space
 	Vector3 v1 = _data->_get_mesh_vertex(p_lod, p_filter, xz);
 	bool nan1 = std::isnan(v1.y);
 	if (nan1) {
@@ -718,14 +716,11 @@ void Terrain3D::snap() {
 }
 
 void Terrain3D::set_world_origin_shift(const Vector3 &p_shift) {
-	_world_origin_shift = -p_shift; // Store as positive true-world offset internally
-	snap(); // resets mesher + collision target positions, forces re-snap
-	// Full collision mode isn't updated from __physics_process; use lightweight
-	// transform-only update (skips expensive heightmap re-reads).
+	_world_origin_shift = -p_shift;
+	snap();
 	if (_collision && !_collision->is_dynamic_mode()) {
-		_collision->update_full_transforms();
+		_collision->apply_origin_shift_transforms();
 	}
-	// Reposition instancer MMIs to shifted space
 	if (_instancer) {
 		_instancer->update_mmi_transforms();
 	}
@@ -1092,12 +1087,10 @@ Ref<Mesh> Terrain3D::bake_mesh(const int p_lod, const Terrain3DData::HeightFilte
  */
 PackedVector3Array Terrain3D::generate_nav_mesh_source_geometry(const AABB &p_global_aabb, const bool p_require_nav) const {
 	LOG(INFO, "Generating NavMesh source geometry from terrain");
-	// Convert shifted AABB to true-world for internal data lookup
-	AABB tw_aabb = p_global_aabb;
-	tw_aabb.position += _world_origin_shift;
+	AABB true_world_aabb = p_global_aabb;
+	true_world_aabb.position += _world_origin_shift;
 	PackedVector3Array faces;
-	_generate_triangles(faces, nullptr, 0, Terrain3DData::HEIGHT_FILTER_NEAREST, p_require_nav, tw_aabb);
-	// Convert output vertices back to shifted space for the nav region
+	_generate_triangles(faces, nullptr, 0, Terrain3DData::HEIGHT_FILTER_NEAREST, p_require_nav, true_world_aabb);
 	if (!_world_origin_shift.is_zero_approx()) {
 		for (int i = 0; i < faces.size(); i++) {
 			faces.set(i, faces[i] - _world_origin_shift);

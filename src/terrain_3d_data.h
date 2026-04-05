@@ -78,11 +78,7 @@ private:
 	void _clear();
 	void _copy_paste_dfr(const Terrain3DRegion *p_src_region, const Rect2i &p_src_rect, const Rect2i &p_dst_rect, const Terrain3DRegion *p_dst_region);
 
-	// Origin shift: returns the current shift vector, or zero if no terrain.
 	Vector3 _get_world_origin_shift() const;
-
-	// Internal true-world data accessors (no shift conversion).
-	// Used by internal code that already has true-world positions.
 	Vector2i _get_region_location(const Vector3 &p_true_world_position) const;
 	void _set_pixel(const MapType p_map_type, const Vector3 &p_true_world_position, const Color &p_pixel);
 	Color _get_pixel(const MapType p_map_type, const Vector3 &p_true_world_position) const;

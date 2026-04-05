@@ -11,19 +11,6 @@
 #include "terrain_3d_data.h"
 
 ///////////////////////////
-// Origin Shift Helper
-///////////////////////////
-
-Vector3 Terrain3DData::_get_world_origin_shift() const {
-	return _terrain ? _terrain->get_true_world_offset() : V3_ZERO;
-}
-
-uint32_t Terrain3DData::_get_control(const Vector3 &p_true_world_position) const {
-	real_t val = _get_pixel(TYPE_CONTROL, p_true_world_position).r;
-	return (std::isnan(val)) ? UINT32_MAX : as_uint(val);
-}
-
-///////////////////////////
 // Private Functions
 ///////////////////////////
 
@@ -54,6 +41,16 @@ void Terrain3DData::_copy_paste_dfr(const Terrain3DRegion *p_src_region, const R
 		}
 	}
 	_terrain->get_instancer()->copy_paste_dfr(p_src_region, p_src_rect, p_dst_region);
+}
+
+// Origin shift helpers
+Vector3 Terrain3DData::_get_world_origin_shift() const {
+	return _terrain ? _terrain->get_true_world_offset() : V3_ZERO;
+}
+
+uint32_t Terrain3DData::_get_control(const Vector3 &p_true_world_position) const {
+	real_t val = _get_pixel(TYPE_CONTROL, p_true_world_position).r;
+	return (std::isnan(val)) ? UINT32_MAX : as_uint(val);
 }
 
 ///////////////////////////
@@ -612,11 +609,6 @@ void Terrain3DData::update_maps(const MapType p_map_type, const bool p_all_regio
 		_terrain->snap();
 	}
 }
-
-///////////////////////////
-// Internal true-world data accessors (no shift conversion)
-// Called by internal code that already has positions in true-world space.
-///////////////////////////
 
 void Terrain3DData::_set_pixel(const MapType p_map_type, const Vector3 &p_true_world_position, const Color &p_pixel) {
 	if (p_map_type < 0 || p_map_type >= TYPE_MAX) {

@@ -330,11 +330,7 @@ void Terrain3DCollision::update(const Vector2i &p_region_loc, const bool p_rebui
 	int time = Time::get_singleton()->get_ticks_usec();
 	real_t spacing = _terrain->get_vertex_spacing();
 	Vector3 shift = _terrain->get_true_world_offset();
-	// Integer descaled shift for grid-aligned data lookup
-	Vector2i descaled_shift = Vector2i(
-			Math::round(shift.x / spacing),
-			Math::round(shift.z / spacing));
-	// Exact float descaled shift for transform adjustment (preserves fractional offsets)
+	Vector2i descaled_shift = Vector2i(Math::round(shift.x / spacing), Math::round(shift.z / spacing));
 	Vector3 descaled_shift_exact = Vector3(shift.x / spacing, 0.f, shift.z / spacing);
 
 	if (is_dynamic_mode()) {
@@ -415,7 +411,7 @@ void Terrain3DCollision::update(const Vector2i &p_region_loc, const bool p_rebui
 					LOG(ERROR, "No more unused shapes! Aborting!");
 					break;
 				}
-				Vector2i data_pos = shape_pos + descaled_shift; // shifted -> true-world (descaled)
+				Vector2i data_pos = shape_pos + descaled_shift;
 				Dictionary shape_data = _get_shape_data(data_pos, _shape_size);
 				if (shape_data.is_empty()) {
 					LOG(EXTREME, "grid[", i, ":", grid_loc, "] shape_pos : ", shape_pos, " No region found");
@@ -423,8 +419,6 @@ void Terrain3DCollision::update(const Vector2i &p_region_loc, const bool p_rebui
 				}
 				int shape_id = inactive_shape_ids.pop_back();
 				Transform3D xform = shape_data["xform"];
-				// xform.origin is in true-world descaled space; shift back to shifted descaled space
-				// Use exact float shift to preserve fractional offsets
 				xform.origin -= descaled_shift_exact;
 				LOG(EXTREME, "grid[", i, ":", grid_loc, "] shape_pos : ", shape_pos, " act ", v3v2i(xform.origin) - shape_offset, " placing shape id ", shape_id);
 				xform.scale(Vector3(spacing, 1.f, spacing));
@@ -447,14 +441,14 @@ void Terrain3DCollision::update(const Vector2i &p_region_loc, const bool p_rebui
 			if (p_region_loc != V2I_MAX && region_loc != p_region_loc) {
 				continue;
 			}
-			Vector2i shape_pos = region_loc * region_size; // true-world (correct for data)
+			Vector2i shape_pos = region_loc * region_size;
 			Dictionary shape_data = _get_shape_data(shape_pos, region_size);
 			if (shape_data.is_empty()) {
 				LOG(ERROR, "Can't get shape data for ", region_loc);
 				continue;
 			}
 			Transform3D xform = shape_data["xform"];
-			xform.origin -= descaled_shift_exact; // true-world -> shifted (exact float)
+			xform.origin -= descaled_shift_exact;
 			xform.scale(Vector3(spacing, 1.f, spacing));
 			_shape_set_transform(i, xform);
 			_shape_set_disabled(i, false);
@@ -464,10 +458,8 @@ void Terrain3DCollision::update(const Vector2i &p_region_loc, const bool p_rebui
 	LOG(EXTREME, "Collision update time: ", Time::get_singleton()->get_ticks_usec() - time, " us");
 }
 
-// Lightweight transform-only update for full collision mode on origin shift.
-// Skips _get_shape_data() (which reads every heightmap pixel) and _shape_set_data().
-// Only repositions existing shapes in physics space.
-void Terrain3DCollision::update_full_transforms() {
+// Lightweight transform-only update for "full" collision mode on origin shift.
+void Terrain3DCollision::apply_origin_shift_transforms() {
 	IS_INIT(VOID);
 	if (!_initialized || is_dynamic_mode()) {
 		return;
@@ -484,7 +476,7 @@ void Terrain3DCollision::update_full_transforms() {
 		Vector2i shape_pos = region_loc * region_size;
 		Vector3 origin = v2iv3(shape_pos + V2I(region_size / 2));
 		origin -= descaled_shift_exact;
-		// Preserve the existing shape transform's basis (Y=90° rotation) and just update origin + scale.
+		// Just update origin + scale, not rotation.
 		Transform3D xform = Transform3D(Basis(V3_UP, Math_PI * .5), origin);
 		xform.scale(Vector3(spacing, 1.f, spacing));
 		_shape_set_transform(i, xform);

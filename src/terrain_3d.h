@@ -72,7 +72,7 @@ private:
 	TargetNode3D _ocean_light_target;
 	TargetNode3D _camera; // Fallback target for clipmap and collision
 
-	// Origin Shift
+	// Origin Shifting
 	Vector3 _world_origin_shift = V3_ZERO;
 
 	// Terrain Mesh
@@ -195,12 +195,7 @@ public:
 	Node3D *get_ocean_light_target() const { return _ocean_light_target.ptr(); }
 	void snap();
 
-	// Origin Shift — two conventions coexist:
-	//   get/set_world_origin_shift(): GDScript-facing, same sign as world_root.global_position.
-	//     e.g. (-50000, 0, -50000) when the world root has been moved to bring the player near origin.
-	//   get_true_world_offset(): C++/shader-facing, positive offset used to recover true-world
-	//     coordinates from shifted positions.  e.g. (50000, 0, 50000).  Opposite sign.
-	// Internally _world_origin_shift stores the positive true-world offset.
+	// Origin Shifting
 	void set_world_origin_shift(const Vector3 &p_shift);
 	Vector3 get_world_origin_shift() const { return -_world_origin_shift; }
 	Vector3 get_true_world_offset() const { return _world_origin_shift; }

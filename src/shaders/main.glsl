@@ -171,10 +171,10 @@ void vertex() {
 	// Get vertex of flat plane in world coordinates and set world UV
 	v_vertex = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 
-	// True-world vertex position (for terrain data sampling)
+	// True-world vertex position (for terrain data sampling when origin shifting)
 	v_origin_shifted_vertex = v_vertex + _world_origin_shift;
 
-	// Distance from target node to vertex on a flat plane (both shifted space)
+	// Distance from target node to vertex on a flat plane
 	v_vertex_xz_dist = length(v_vertex.xz - _target_pos.xz);
 
 	// Geomorph vertex across clipmap LODs, set end and start for linear height interpolate
@@ -191,10 +191,8 @@ void vertex() {
 			round(mod(v_vertex.x * inv_scale, 4.0)) * 0.25))) :
 		// Symmetric shift
 		vertex_fract * round((fract(v_vertex.xz * 0.25 * inv_scale) - 0.5) * 4.0);
-	// Data-lookup positions — use true-world for UV derivation
-	vec2 sample_xz = v_origin_shifted_vertex.xz;
-	vec2 start_pos = sample_xz * _vertex_density;
-	vec2 end_pos = (sample_xz - shift * scale) * _vertex_density;
+	vec2 start_pos = v_origin_shifted_vertex.xz * _vertex_density;
+	vec2 end_pos = (v_origin_shifted_vertex.xz - shift * scale) * _vertex_density;
 
 	v_vertex.xz -= shift * scale * vertex_lerp;
 	v_origin_shifted_vertex.xz -= shift * scale * vertex_lerp;
