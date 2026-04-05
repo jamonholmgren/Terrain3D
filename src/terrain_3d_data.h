@@ -224,6 +224,10 @@ inline Vector2i Terrain3DData::_get_region_location(const Vector3 &p_true_world_
 	return Vector2i((descaled_position / real_t(_region_size)).floor());
 }
 
+inline Vector2i Terrain3DData::get_region_location(const Vector3 &p_global_position) const {
+	return _get_region_location(_terrain->to_true_world_position(p_global_position));
+}
+
 // Returns id of any active region. -1 if out of bounds or no region, or region id
 inline int Terrain3DData::get_region_id(const Vector2i &p_region_loc) const {
 	int map_index = get_region_map_index(p_region_loc);

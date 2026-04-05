@@ -458,10 +458,9 @@ void Terrain3DCollision::update(const Vector2i &p_region_loc, const bool p_rebui
 	LOG(EXTREME, "Collision update time: ", Time::get_singleton()->get_ticks_usec() - time, " us");
 }
 
-// Lightweight transform-only update for "full" collision mode on origin shift.
 void Terrain3DCollision::apply_origin_shift_transforms() {
 	IS_INIT(VOID);
-	if (!_initialized || is_dynamic_mode()) {
+	if (is_dynamic_mode()) {
 		return;
 	}
 	real_t spacing = _terrain->get_vertex_spacing();
@@ -472,11 +471,9 @@ void Terrain3DCollision::apply_origin_shift_transforms() {
 	TypedArray<Vector2i> region_locs = _terrain->get_data()->get_region_locations();
 	for (int i = 0; i < region_locs.size(); i++) {
 		Vector2i region_loc = region_locs[i];
-		// Recompute the transform origin from the true-world region position, then shift to physics space.
 		Vector2i shape_pos = region_loc * region_size;
 		Vector3 origin = v2iv3(shape_pos + V2I(region_size / 2));
 		origin -= descaled_shift_exact;
-		// Just update origin + scale, not rotation.
 		Transform3D xform = Transform3D(Basis(V3_UP, Math_PI * .5), origin);
 		xform.scale(Vector3(spacing, 1.f, spacing));
 		_shape_set_transform(i, xform);

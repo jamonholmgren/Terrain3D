@@ -568,8 +568,6 @@ void Terrain3DInstancer::initialize(Terrain3D *p_terrain) {
 	update_mmis();
 }
 
-// Lightweight transform-only update for origin shift.
-// Repositions all MMIs without regenerating multimesh data.
 void Terrain3DInstancer::apply_mmi_origin_shift_transforms() {
 	IS_DATA_INIT(VOID);
 	real_t vertex_spacing = _terrain->get_vertex_spacing();
@@ -821,7 +819,8 @@ void Terrain3DInstancer::remove_instances(const Vector3 &p_global_position, cons
 			continue;
 		}
 		Vector3 global_local_offset = Vector3(region_loc.x * region_size * vertex_spacing, 0.f, region_loc.y * region_size * vertex_spacing);
-		Vector2 localised_ring_center = Vector2(p_global_position.x - global_local_offset.x, p_global_position.z - global_local_offset.z);
+		Vector3 true_world_position = _terrain->to_true_world_position(p_global_position);
+		Vector2 localised_ring_center = Vector2(true_world_position.x - global_local_offset.x, true_world_position.z - global_local_offset.z);
 		// For this mesh id, or all mesh ids
 		for (int m = (modifier_shift ? 0 : mesh_id); m <= (modifier_shift ? mesh_count - 1 : mesh_id); m++) {
 			// Ensure this region has this mesh
@@ -843,7 +842,8 @@ void Terrain3DInstancer::remove_instances(const Vector3 &p_global_position, cons
 			real_t cell_step = brush_size / ceil(brush_size / real_t(CELL_SIZE) / vertex_spacing);
 			for (real_t x = p_global_position.x - half_brush_size; x <= p_global_position.x + half_brush_size; x += cell_step) {
 				for (real_t z = p_global_position.z - half_brush_size; z <= p_global_position.z + half_brush_size; z += cell_step) {
-					Vector3 cell_pos = Vector3(x, 0.f, z) - global_local_offset;
+					Vector3 true_world_cell_pos = _terrain->to_true_world_position(Vector3(x, 0.f, z));
+					Vector3 cell_pos = true_world_cell_pos - global_local_offset;
 					// Manually calculate cell pos without modulus, locations not in the current region will not be found.
 					Vector2i cell_loc;
 					cell_loc.x = UtilityFunctions::floori(cell_pos.x / vertex_spacing) / CELL_SIZE;
@@ -878,7 +878,7 @@ void Terrain3DInstancer::remove_instances(const Vector3 &p_global_position, cons
 						continue;
 					}
 					Vector3 global_pos = t.origin + global_local_offset - t.basis.get_column(1) * mesh_height_offset;
-					Array height_data = _get_usable_height(global_pos, slope_range, on_collision, raycast_height);
+					Array height_data = _get_usable_height(_terrain->to_shifted_position(global_pos), slope_range, on_collision, raycast_height);
 					if (height_data.size() != 3) {
 						updated_xforms.push_back(t);
 						updated_colors.push_back(colors[i]);
@@ -934,12 +934,15 @@ void Terrain3DInstancer::add_transforms(const int p_mesh_id, const TypedArray<Tr
 	Dictionary colors_dict;
 	Ref<Terrain3DMeshAsset> mesh_asset = _terrain->get_assets()->get_mesh_asset(p_mesh_id);
 	real_t height_offset = mesh_asset->get_height_offset();
+	int region_size = _terrain->get_region_size();
+	real_t vertex_spacing = _terrain->get_vertex_spacing();
 
 	// Separate incoming transforms/colors by region Dict{ region_loc => Array() }
 	LOG(INFO, "Separating ", p_xforms.size(), " transforms and ", p_colors.size(), " colors into regions");
 	for (int i = 0; i < p_xforms.size(); i++) {
 		// Get adjusted xform/color
 		Transform3D trns = p_xforms[i];
+		trns.origin = _terrain->to_true_world_position(trns.origin);
 		trns.origin += trns.basis.get_column(1) * height_offset; // Offset along UP axis
 		Color col = COLOR_WHITE;
 		if (p_colors.size() > i) {
@@ -947,7 +950,8 @@ void Terrain3DInstancer::add_transforms(const int p_mesh_id, const TypedArray<Tr
 		}
 
 		// Store by region offset
-		Vector2i region_loc = _terrain->get_data()->get_region_location(trns.origin);
+		Vector2 descaled_position = v3v2(trns.origin) / vertex_spacing;
+		Vector2i region_loc = Vector2i((descaled_position / real_t(region_size)).floor());
 		if (!xforms_dict.has(region_loc)) {
 			xforms_dict[region_loc] = TypedArray<Transform3D>();
 			colors_dict[region_loc] = PackedColorArray();
@@ -1048,6 +1052,7 @@ void Terrain3DInstancer::update_transforms(const AABB &p_aabb) {
 	Rect2 rect = aabb2rect(p_aabb);
 	LOG(EXTREME, "Updating transforms within ", rect);
 	Vector2 global_position = rect.get_center();
+	Vector2 true_world_position = v3v2(_terrain->to_true_world_position(Vector3(global_position.x, 0.f, global_position.y)));
 	Vector2 size = rect.get_size();
 	Vector2 half_size = size * 0.5f + V2(1.f); // 1m margin
 	if (size.is_zero_approx()) {
@@ -1089,6 +1094,7 @@ void Terrain3DInstancer::update_transforms(const AABB &p_aabb) {
 			continue;
 		}
 		Vector3 global_local_offset = Vector3(region_loc.x * region_size * vertex_spacing, 0.f, region_loc.y * region_size * vertex_spacing);
+		Rect2 true_world_rect = Rect2(true_world_position - half_size, size);
 
 		// For each mesh type in this region
 		for (const int &region_mesh_id : mesh_types) {
@@ -1105,7 +1111,8 @@ void Terrain3DInstancer::update_transforms(const AABB &p_aabb) {
 			Vector2 cell_step = Vector2(size.x / ceil(size.x / real_t(CELL_SIZE) / vertex_spacing), size.y / ceil(size.y / real_t(CELL_SIZE) / vertex_spacing));
 			for (real_t x = global_position.x - half_size.x; x <= global_position.x + half_size.x; x += cell_step.x) {
 				for (real_t z = global_position.y - half_size.y; z <= global_position.y + half_size.y; z += cell_step.y) {
-					Vector3 cell_pos = Vector3(x, 0.f, z) - global_local_offset;
+					Vector3 true_world_cell_pos = _terrain->to_true_world_position(Vector3(x, 0.f, z));
+					Vector3 cell_pos = true_world_cell_pos - global_local_offset;
 					// Manually calculate cell pos without modulus, locations not in the current region will not be found.
 					Vector2i cell_loc;
 					cell_loc.x = UtilityFunctions::floori(cell_pos.x / vertex_spacing) / CELL_SIZE;
@@ -1130,10 +1137,10 @@ void Terrain3DInstancer::update_transforms(const AABB &p_aabb) {
 				for (int i = 0; i < xforms.size(); i++) {
 					Transform3D t = xforms[i];
 					Vector3 global_origin(t.origin + global_local_offset);
-					if (rect.has_point(Vector2(global_origin.x, global_origin.z))) {
+					if (true_world_rect.has_point(Vector2(global_origin.x, global_origin.z))) {
 						Vector3 height_offset = t.basis.get_column(1) * mesh_height_offset;
 						t.origin -= height_offset;
-						Array height_data = _get_usable_height(global_origin, Vector2(0.f, 90.f), on_collision, raycast_height);
+						Array height_data = _get_usable_height(_terrain->to_shifted_position(global_origin), Vector2(0.f, 90.f), on_collision, raycast_height);
 						if (height_data.size() != 3) {
 							continue;
 						}
@@ -1171,8 +1178,9 @@ int Terrain3DInstancer::get_closest_mesh_id(const Vector3 &p_global_position) co
 		return -1; // No region found
 	}
 	int region_size = region->get_region_size();
+	Vector3 true_world_position = _terrain->to_true_world_position(p_global_position);
 	Vector3 region_global_pos = v2iv3(region_loc) * real_t(region_size) * _terrain->get_vertex_spacing();
-	Vector2i cell = _get_cell(p_global_position, region_size);
+	Vector2i cell = _get_cell(true_world_position, region_size);
 	Dictionary mesh_inst_dict = region->get_instances();
 	if (mesh_inst_dict.is_empty()) {
 		return -1; // No meshes found
@@ -1200,7 +1208,7 @@ int Terrain3DInstancer::get_closest_mesh_id(const Vector3 &p_global_position) co
 		}
 		for (const Transform3D &instance_transform : xforms) {
 			Vector3 instance_origin = instance_transform.origin + region_global_pos; // Convert to global position
-			real_t distance = instance_origin.distance_squared_to(p_global_position);
+			real_t distance = instance_origin.distance_squared_to(true_world_position);
 			if (distance < closest_distance) {
 				closest_distance = distance;
 				closest_id = mesh_id;

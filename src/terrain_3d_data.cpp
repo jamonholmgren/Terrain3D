@@ -217,11 +217,6 @@ bool Terrain3DData::is_region_deleted(const Vector2i &p_region_loc) const {
 	return region->is_deleted();
 }
 
-// Returns a region location given a global position. No bounds checking nor data access.
-Vector2i Terrain3DData::get_region_location(const Vector3 &p_global_position) const {
-	return _get_region_location(_terrain->to_true_world_position(p_global_position));
-}
-
 Ref<Terrain3DRegion> Terrain3DData::add_region_blankp(const Vector3 &p_global_position, const bool p_update) {
 	return add_region_blank(get_region_location(p_global_position));
 }
@@ -740,7 +735,7 @@ bool Terrain3DData::_is_in_slope(const Vector3 &p_true_world_position, const Vec
 		if (get_region_id(_get_region_location(p_true_world_position)) < 0) {
 			return false;
 		}
-		// Adapted from _get_height() to work with holes
+		// Adapted from get_height() to work with holes
 		auto get_height_fn = [&](Vector3 pos) -> real_t {
 			real_t step = _terrain->get_vertex_spacing();
 			// Round to nearest vertex

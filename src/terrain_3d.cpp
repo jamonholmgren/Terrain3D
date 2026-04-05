@@ -442,10 +442,10 @@ void Terrain3D::_generate_triangle_pair(PackedVector3Array &p_vertices, PackedVe
 			v4.y = v1.y;
 		}
 	}
-	uint32_t ctrl1 = _data->get_control(xz);
-	uint32_t ctrl2 = _data->get_control(xsz);
-	uint32_t ctrl3 = _data->get_control(xzs);
-	uint32_t ctrl4 = _data->get_control(xszs);
+	uint32_t ctrl1 = _data->_get_control(xz);
+	uint32_t ctrl2 = _data->_get_control(xsz);
+	uint32_t ctrl3 = _data->_get_control(xzs);
+	uint32_t ctrl4 = _data->_get_control(xszs);
 	// Holes are only where the control map is valid and the bit is set
 	bool hole1 = ctrl1 != UINT32_MAX && is_hole(ctrl1);
 	bool hole2 = ctrl2 != UINT32_MAX && is_hole(ctrl2);
@@ -716,7 +716,11 @@ void Terrain3D::snap() {
 }
 
 void Terrain3D::set_world_origin_shift(const Vector3 &p_shift) {
-	_world_origin_shift = -p_shift;
+	Vector3 true_world_offset = -p_shift;
+	if (_world_origin_shift == true_world_offset) {
+		return;
+	}
+	_world_origin_shift = true_world_offset;
 	snap();
 	if (_collision && !_collision->is_dynamic_mode()) {
 		_collision->apply_origin_shift_transforms();

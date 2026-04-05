@@ -108,7 +108,7 @@ struct material {
 };
 
 varying vec3 v_vertex;
-varying vec3 v_origin_shifted_vertex;
+varying vec3 v_true_world_vertex;
 varying float v_vertex_xz_dist;
 varying vec3 v_camera_pos;
 )"
@@ -171,8 +171,8 @@ void vertex() {
 	// Get vertex of flat plane in world coordinates and set world UV
 	v_vertex = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 
-	// Apply origin shift for true-world sampling
-	v_origin_shifted_vertex = v_vertex + _world_origin_shift;
+	// True-world vertex position for terrain sampling
+	v_true_world_vertex = v_vertex + _world_origin_shift;
 
 	// Distance from target node to vertex on a flat plane
 	v_vertex_xz_dist = length(v_vertex.xz - _target_pos.xz);
@@ -191,14 +191,14 @@ void vertex() {
 			round(mod(v_vertex.x * inv_scale, 4.0)) * 0.25))) :
 		// Symmetric shift
 		vertex_fract * round((fract(v_vertex.xz * 0.25 * inv_scale) - 0.5) * 4.0);
-	vec2 start_pos = v_origin_shifted_vertex.xz * _vertex_density;
-	vec2 end_pos = (v_origin_shifted_vertex.xz - shift * scale) * _vertex_density;
+	vec2 start_pos = v_true_world_vertex.xz * _vertex_density;
+	vec2 end_pos = (v_true_world_vertex.xz - shift * scale) * _vertex_density;
 
 	v_vertex.xz -= shift * scale * vertex_lerp;
-	v_origin_shifted_vertex.xz -= shift * scale * vertex_lerp;
+	v_true_world_vertex.xz -= shift * scale * vertex_lerp;
 
 	// UV coordinates in region space. 0-1 covers 1 region, 1-2 is the next region, etc.
-	UV = v_origin_shifted_vertex.xz * _vertex_density;
+	UV = v_true_world_vertex.xz * _vertex_density;
 
 	// UV coordinates in region space + texel offset. Values are 0 to 1 within regions
 	UV2 = fma(UV, vec2(_region_texel_size), vec2(0.5 * _region_texel_size));
@@ -261,7 +261,7 @@ void accumulate_material(vec3 base_ddx, vec3 base_ddy, const mat3 TNB, const flo
 			float h, inout material mat) {
 
 	// Applying scaling before projection reduces the number of multiplys ops required.
-	vec3 i_vertex = v_origin_shifted_vertex;
+	vec3 i_vertex = v_true_world_vertex;
 
 	// Control map scale
 	float control_scale = DECODE_SCALE(control);

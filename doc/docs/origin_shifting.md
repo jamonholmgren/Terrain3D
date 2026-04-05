@@ -47,7 +47,7 @@ All [collision modes](collision.md) are supported:
 
 ## Setup
 
-For now, you will need to compile Terrain3D from this branch's source code. Once this is integrated into Terrain3D core, no special Godot build or project settings should be required.
+No special Godot build or project settings should be required.
 
 There are two common ways to set up your scene for origin shifting:
 
@@ -84,9 +84,10 @@ const SHIFT_THRESHOLD: float = 2048.0
 
 func _physics_process(_delta: float) -> void:
     var player_pos: Vector3 = player.global_position
-    if player_pos.length() > SHIFT_THRESHOLD:
+    var player_pos_xz := Vector2(player_pos.x, player_pos.z)
+    if player_pos_xz.length() > SHIFT_THRESHOLD:
         # Move the world root so the player ends up near the origin.
-        world_root.global_position -= player_pos
+        world_root.global_position -= Vector3(player_pos.x, 0.0, player_pos.z)
 
         # Tell Terrain3D the same value.
         terrain.set_world_origin_shift(world_root.global_position)
@@ -155,7 +156,7 @@ The following functions auto-convert, so they can be used directly with `global_
 
 [Terrain3D's Instancer](./instancer.md) MultiMeshInstance3D (MMI) transforms are automatically repositioned into shifted space when you call `set_world_origin_shift()`. The underlying instance data is not regenerated. Only the MMI origin transform is updated, making the operation lightweight.
 
-No code changes are needed for instanced vegetation, rocks, or other mesh assets placed through the Terrain3D instancer.
+Runtime instancer APIs such as `add_transforms()`, `add_multimesh()`, `update_transforms()`, and `get_closest_mesh_id()` accept shifted-space positions and transforms. Editor painting remains out of scope for origin shifting.
 
 ## Navigation Mesh
 
@@ -165,6 +166,8 @@ No code changes are needed for instanced vegetation, rocks, or other mesh assets
 var nav_faces: PackedVector3Array = terrain.generate_nav_mesh_source_geometry(aabb)
 # nav_faces are in shifted space, ready for NavigationMesh baking
 ```
+
+`bake_mesh()` is different. It returns mesh geometry in true-world coordinates, which is usually the most useful behavior for baking or export workflows.
 
 ## Multiplayer
 
@@ -202,10 +205,9 @@ If you use a custom `ShaderMaterial` override such as for the ocean, the built-i
    vec3 true_world_pos = VERTEX + _world_origin_shift;
    ```
 
-3. Set it from GDScript when the shift changes. The shader uniform expects the positive true-world offset, so `to_true_world_position(Vector3.ZERO)` provides the value the shader needs:
+3. Set it from GDScript when the shift changes. The shader uniform expects the positive true-world offset, which is the inverse of `world_root.global_position`:
    ```gdscript
-   # to_true_world_position(ZERO) gives the positive offset the shader needs
-   ocean_material.set_shader_parameter("_world_origin_shift", terrain.to_true_world_position(Vector3.ZERO))
+   ocean_material.set_shader_parameter("_world_origin_shift", -world_root.global_position)
    ```
 
 ## Limitations
