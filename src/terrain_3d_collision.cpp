@@ -329,7 +329,7 @@ void Terrain3DCollision::update(const Vector2i &p_region_loc, const bool p_rebui
 	}
 	int time = Time::get_singleton()->get_ticks_usec();
 	real_t spacing = _terrain->get_vertex_spacing();
-	Vector3 shift = _terrain->get_world_origin_shift();
+	Vector3 shift = _terrain->get_true_world_offset();
 	// Integer descaled shift for grid-aligned data lookup
 	Vector2i descaled_shift = Vector2i(
 			Math::round(shift.x / spacing),
@@ -473,7 +473,7 @@ void Terrain3DCollision::update_full_transforms() {
 		return;
 	}
 	real_t spacing = _terrain->get_vertex_spacing();
-	Vector3 shift = _terrain->get_world_origin_shift();
+	Vector3 shift = _terrain->get_true_world_offset();
 	Vector3 descaled_shift_exact = Vector3(shift.x / spacing, 0.f, shift.z / spacing);
 
 	int region_size = _terrain->get_region_size();

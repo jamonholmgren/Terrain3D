@@ -213,7 +213,7 @@ void Terrain3DInstancer::_update_mmi_by_region(const Terrain3DRegion *p_region, 
 			Transform3D t = Transform3D();
 			int region_size = p_region->get_region_size();
 			real_t vertex_spacing = _terrain->get_vertex_spacing();
-			Vector3 shift = _terrain->get_world_origin_shift();
+			Vector3 shift = _terrain->get_true_world_offset();
 			t.origin.x += region_loc.x * region_size * vertex_spacing - shift.x;
 			t.origin.z += region_loc.y * region_size * vertex_spacing - shift.z;
 			RS->instance_set_transform(mmi, t);
@@ -573,7 +573,7 @@ void Terrain3DInstancer::initialize(Terrain3D *p_terrain) {
 void Terrain3DInstancer::update_mmi_transforms() {
 	IS_DATA_INIT(VOID);
 	real_t vertex_spacing = _terrain->get_vertex_spacing();
-	Vector3 shift = _terrain->get_world_origin_shift();
+	Vector3 shift = _terrain->get_true_world_offset();
 	for (auto &[region_loc, mesh_dict] : _mmi_rids) {
 		Terrain3DRegion *region = _terrain->get_data()->get_region_ptr(region_loc);
 		if (!region) {

@@ -15,7 +15,7 @@
 ///////////////////////////
 
 Vector3 Terrain3DData::_get_world_origin_shift() const {
-	return _terrain ? _terrain->get_world_origin_shift() : V3_ZERO;
+	return _terrain ? _terrain->get_true_world_offset() : V3_ZERO;
 }
 
 uint32_t Terrain3DData::_get_control(const Vector3 &p_true_world_position) const {

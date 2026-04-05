@@ -718,7 +718,7 @@ void Terrain3D::snap() {
 }
 
 void Terrain3D::set_world_origin_shift(const Vector3 &p_shift) {
-	_world_origin_shift = p_shift;
+	_world_origin_shift = -p_shift; // Store as positive true-world offset internally
 	snap(); // resets mesher + collision target positions, forces re-snap
 	// Full collision mode isn't updated from __physics_process; use lightweight
 	// transform-only update (skips expensive heightmap re-reads).
