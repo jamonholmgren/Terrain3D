@@ -6,9 +6,10 @@ This page describes how Terrain3D supports origin shifting so that terrain rende
 
 ## Caveats
 
-1. Only use origin shifting if you are dealing with large worlds and experiencing noticable jittering due to floating point precision errors. Origin shifting brings some complexity to your game and is only worth it if you are willing to invest the time to implement it correctly.
+1. Only use origin shifting if you are dealing with large worlds and experiencing noticable jittering due to floating point precision errors. Origin shifting brings additional complexity to your game and is only worth it if you are willing to invest the time to implement it correctly and deal with the additional complexity.
 2. Currently, origin shifting is not supported in the editor, only in the game runtime.
 3. Origin shifting only works on the XZ plane (flat along the terrain). Y-axis (up and down) shifting is ignored.
+4. With zero shift (the default), the two spaces are identical, so existing code works without changes.
 
 ## How It Works
 
@@ -45,21 +46,28 @@ All [collision modes](collision.md) are supported:
 
 _For now, you'll need to compile Terrain3D from this branch's source code._ Once this is integrated into Terrain3D core, no special Godot build or project settings will be required. Origin shifting will work with the standard single-precision Godot editor and export templates.
 
-1. Make sure your Terrain3D node is in the scene.
-2. Create a root `Node3D` (e.g. `WorldRoot`) that holds all shiftable game objects — player, enemies, props, etc. Terrain3D should **not** be a child of this node, nor should this root node be a child of Terrain3D. Generally, they will be siblings, although this is not required.
-3. In your game script, call `set_world_origin_shift()` on the Terrain3D node whenever you shift the origin.
+There are two ways you can set up your scene for origin shifting:
+
+1. **Movable Root Node Method:** Easiest, but can possibly still cause noticable jitter: Create a root `Node3D` (e.g. `WorldRoot`) that holds all shiftable game objects -- player, enemies, props, etc -- and move it the opposite direction of the player's movement when the player moves far enough from the global origin. This can still result in some jittering of the objects themselves due to large addition/subtraction of large floating point numbers if you get really far from the origin, but meshes and objects that are children of these game objects should be fine.
+2. **Shift All Objects Method:** Move all of your game objects by the offset as you move it in the opposite direction of the player's movement. This shouldn't have any jittering issues, but if you forget to shift something, it'll "teleport away" during a shift. It is also a bit less efficient/performant than the first method since you have to loop through all objects and move them one at a time instead of moving just the root node.
+
+With either method, in your game script, call `set_world_origin_shift()` on the Terrain3D node whenever you shift the origin.
 
 A typical scene tree:
 
 ```
 Main
-├── Terrain3D          <- stays at origin, receives set_world_origin_shift()
-├── WorldRoot          <- moved when the player moves far enough from the global origin
-│   ├── Player
-│   ├── Enemies
-│   └── Other Objects
-└── UI
+├── Terrain3D   <- stays at origin, call set_world_origin_shift() on it
+├── WorldRoot   <- Movable Root
+│   ├── Player  <- Shiftable Object
+│   ├── Enemy   <- Shiftable Object
+│   ├── Enemy   <- Shiftable Object
+│   └── Tree    <- Shiftable Object
+└── UI          <- Non-shiftable Object
 ```
+
+If doing method 1, you'd move the WorldRoot node when origin shifting.
+If doing method 2, you'd loop through all objects (Player, Enemy, etc) and move them when origin shifting instead of the root.
 
 ## GDScript Usage
 
@@ -85,11 +93,13 @@ func _physics_process(_delta: float) -> void:
 
 ### set_world_origin_shift(shift: Vector3)
 
-Sets the cumulative origin shift. Pass the same value as `world_root.global_position`. This re-snaps the clipmap and collision systems, and repositions instancer MMIs. Call this from `_physics_process` — calling from `_process` or elsewhere can cause visual glitches.
+Sets the cumulative origin shift. Generally, you'd pass the same value as `world_root.global_position`. This re-snaps the clipmap and collision systems, and repositions instancer MMIs.
 
 ```gdscript
-terrain.set_world_origin_shift(Vector3(-50000.0, 0.0, -50000.0))
+terrain.set_world_origin_shift(world_root.global_position)
 ```
+
+Call this from `_physics_process` — calling from `_process` or elsewhere can cause visual glitches. Avoid calling this every frame as it can be slightly expensive and cause visual glitches.
 
 ### get_world_origin_shift() -> Vector3
 
@@ -124,7 +134,7 @@ var tex: Vector3 = terrain.data.get_texture_id(player.global_position)
 var region_loc: Vector2i = terrain.data.get_region_location(player.global_position)
 ```
 
-The following functions all auto-convert:
+The following functions all auto-convert, so you can use them with global_position and they'll work as expected:
 
 - `get_height()`, `set_height()`
 - `get_normal()`
@@ -136,21 +146,11 @@ The following functions all auto-convert:
 - `get_mesh_vertex()`
 - `is_in_slope()`
 - `get_region_location()`, `get_region_idp()`, `get_regionp()`
-
-With zero shift (the default), the two spaces are identical, so existing code works without changes.
-
-### get_intersection()
-
-`Terrain3D.get_intersection()` also works with shifted-space positions. Pass your camera's `global_position` and ray direction directly — the returned hit point will be in shifted space:
-
-```gdscript
-var hit: Vector3 = terrain.get_intersection(camera.global_position, ray_dir)
-# hit is in shifted space, ready to use in your scene
-```
+- `get_intersection()`
 
 ## Instancer
 
-Instancer MultiMeshInstance3D (MMI) transforms are automatically repositioned into shifted space when you call `set_world_origin_shift()`. The underlying instance data (per-tree transforms within each MultiMesh) is not regenerated — only the MMI's origin transform is updated, making the operation lightweight.
+[Terrain3D's Instancer](./instancer.md) MultiMeshInstance3D (MMI) transforms are automatically repositioned into shifted space when you call `set_world_origin_shift()`. The underlying instance data (per-tree transforms within each MultiMesh) is not regenerated — only the MMI's origin transform is updated, making the operation lightweight.
 
 No code changes are needed for instanced vegetation, rocks, or other mesh assets placed through the Terrain3D instancer.
 
@@ -199,7 +199,7 @@ If you use a custom `ShaderMaterial` override (e.g. for the ocean), the built-in
    vec3 true_world_pos = VERTEX + _world_origin_shift;
    ```
 
-3. Set it from GDScript when the shift changes. The shader uniform expects a positive true-world offset:
+3. Set it from GDScript when the shift changes. The shader uniform expects a positive true-world offset, so using `to_true_world_position(Vector3.ZERO)` gives the positive offset the shader needs:
    ```gdscript
    # to_true_world_position(ZERO) gives the positive offset the shader needs
    ocean_material.set_shader_parameter("_world_origin_shift", terrain.to_true_world_position(Vector3.ZERO))

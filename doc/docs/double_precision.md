@@ -7,6 +7,8 @@ Building Terrain3D with double precision (aka 64-bit) floats allows high precisi
 
 For a more detailed explanation, see [Large World Coordinates](https://docs.godotengine.org/en/stable/tutorials/physics/large_world_coordinates.html) in the Godot documentation.
 
+For an alternative approach that keep precision high by shifting the entire world around the player to keep the player near the origin without requiring a double precision build, see [Origin Shifting](origin_shifting.md).
+
 
 ## Caveats
 
